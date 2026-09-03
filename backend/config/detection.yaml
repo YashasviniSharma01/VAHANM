@@ -1,0 +1,30 @@
+# YOLO Detection Configuration
+# This file configures the YOLO v8 detector for vehicle detection
+
+# Model configuration
+model_path: "yolov8n.pt"  # yolov8n.pt (nano), yolov8s.pt (small), yolov8m.pt (medium), yolov8l.pt (large), yolov8x.pt (extra large)
+model_size: "n"            # n, s, m, l, x - used if model_path not specified
+
+# Detection parameters
+conf_threshold: 0.25       # Minimum confidence for detections (0.0 - 1.0)
+iou_threshold: 0.45        # IoU threshold for NMS (0.0 - 1.0)
+
+# Device configuration
+device: "cuda"             # "cuda" for GPU, "cpu" for CPU, "mps" for Apple Silicon
+
+# Image processing
+imgsz: 640                 # Resize image to this size before inference
+half_precision: true       # Use FP16 precision for faster inference (GPU only)
+
+# Classes to detect
+# None = detect all COCO classes, or specify list of class indices
+# COCO classes: https://github.com/ultralytics/ultralytics/blob/main/ultralytics/cfg/datasets/coco.yaml
+# For vehicle detection, commonly use classes: 2 (car), 3 (motorcycle), 5 (bus), 7 (truck)
+classes: null              # Detect all classes
+
+# Preprocessing options
+preprocess:
+  resize: true             # Resize frames before inference
+  target_size: 640         # Target size for resizing
+  normalize: true          # Normalize pixel values
+  color_conversion: true   # Convert BGR to RGB if needed
