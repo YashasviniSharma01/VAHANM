@@ -10,7 +10,7 @@
 
 The system processes geographically distributed traffic-camera streams, detects and tracks vehicles locally, identifies traffic violations, performs license-plate recognition, associates vehicles across different sensors, and reconstructs their movement through a city-wide road graph.
 
-**Core Insight:** A node is a collection of heterogeneous devices (cameras, radars, microphones), not a camera. Devices have independent identities and capabilities, while the node/cluster coordinates their operation.
+**Core Insight:** A node is a collection of heterogeneous devices (cameras, radars, microphones), not only a camera. Devices have independent identities and capabilities, while the node/cluster coordinates their operations.
 
 The primary design principle is:
 
