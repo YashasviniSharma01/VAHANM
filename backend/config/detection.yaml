@@ -1,30 +1,41 @@
-# YOLO Detection Configuration
-# This file configures the YOLO v8 detector for vehicle detection
+# VAHANM — Detection Configuration
+# Used by YOLODetector (yolo_detector.py)
+# edge_tracker.py uses its own defaults directly.
 
-# Model configuration
-model_path: "yolov8n.pt"  # yolov8n.pt (nano), yolov8s.pt (small), yolov8m.pt (medium), yolov8l.pt (large), yolov8x.pt (extra large)
-model_size: "n"            # n, s, m, l, x - used if model_path not specified
+# ── Model ────────────────────────────────────────────────────────────────────
+# For new work use YOLO26. yolov26 names (yolov26n.pt, yolov26s.pt …) are still
+# supported by Ultralytics for backwards compatibility.
+model_path: "yolo26n.pt"    # yolo26n / yolo26s / yolo26m / yolo26l / yolo26x
+model_size: "n"             # used only if model_path is not an explicit filename
 
-# Detection parameters
-conf_threshold: 0.25       # Minimum confidence for detections (0.0 - 1.0)
-iou_threshold: 0.45        # IoU threshold for NMS (0.0 - 1.0)
+# ── Detection thresholds ──────────────────────────────────────────────────────
+conf_threshold: 0.35        # minimum detection confidence (edge_tracker default: 0.35)
+iou_threshold:  0.45        # NMS IoU threshold
 
-# Device configuration
-device: "cuda"             # "cuda" for GPU, "cpu" for CPU, "mps" for Apple Silicon
+# ── Device ───────────────────────────────────────────────────────────────────
+device: "cpu"               # "cuda" | "cpu" | "mps" (Apple Silicon)
+                            # YOLO auto-selects CUDA when available;
+                            # set explicitly here only to override.
 
-# Image processing
-imgsz: 640                 # Resize image to this size before inference
-half_precision: true       # Use FP16 precision for faster inference (GPU only)
+# ── Half precision ───────────────────────────────────────────────────────────
+# FP16 inference is faster but requires an NVIDIA GPU with CUDA.
+# Enabling it on CPU raises an error or silently falls back.
+# Leave false unless you have confirmed CUDA is available.
+half_precision: false
 
-# Classes to detect
-# None = detect all COCO classes, or specify list of class indices
-# COCO classes: https://github.com/ultralytics/ultralytics/blob/main/ultralytics/cfg/datasets/coco.yaml
-# For vehicle detection, commonly use classes: 2 (car), 3 (motorcycle), 5 (bus), 7 (truck)
-classes: null              # Detect all classes
+# ── Image size ───────────────────────────────────────────────────────────────
+imgsz: 640                  # 320 / 416 / 640 / 1280
+                            # smaller → faster, lower accuracy
+                            # larger  → slower, higher accuracy
 
-# Preprocessing options
+# ── Class filter ─────────────────────────────────────────────────────────────
+# null   = detect all COCO classes
+# [2, 3, 5, 7] = cars, motorcycles, buses, trucks only
+classes: null
+
+# ── Preprocessing (YOLODetector wrapper only) ────────────────────────────────
 preprocess:
-  resize: true             # Resize frames before inference
-  target_size: 640         # Target size for resizing
-  normalize: true          # Normalize pixel values
-  color_conversion: true   # Convert BGR to RGB if needed
+  resize: true
+  target_size: 640
+  normalize: true
+  color_conversion: true    # BGR → RGB

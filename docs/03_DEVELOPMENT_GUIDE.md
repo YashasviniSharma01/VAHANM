@@ -1,654 +1,762 @@
 # VAHANM Development Guide
 
-## Getting Started
+This document describes the **current implementation state**: what code exists, what
+it does, how to run it, and what comes next.
 
-This guide will help you set up the VAHANM development environment and understand the codebase structure.
+Architecture and reasoning design live in separate documents. When a section says
+"see `02_REASONING_AND_ORCHESTRATION.md Section N`" that is the authoritative design
+reference. This document records the implementation decisions made against those
+interfaces.
 
-### Prerequisites
+---
 
-- Python 3.10 or higher
-- pip package manager
-- Git
-- Camera for testing (laptop webcam or external camera)
-- PostgreSQL (for backend storage)
+## Repository Layout
 
-### System Requirements
+```
+VAHANM/
+├── backend/
+│   ├── .venv/                          ↝ Python 3.13 virtual environment
+│   ├── config/
+│   │   └── detection.yaml              ↝ YOLODetector configuration
+│   ├── intelligence/
+│   │   ├── perception/
+│   │   │   └── detection/
+│   │   │       ├── edge_tracker.py     ↝ Phase 1 entry point
+│   │   │       ├── yolo_detector.py    ↝ YOLODetector wrapper (detection-only)
+│   │   │       └── __init__.py
+│   │   ├── perception/
+│   │   │   ├── observation_manager.py  ↝ Phase 2
+│   │   │   ├── evidence_capture.py     ↝ Phase 4
+│   │   │   └── lpr/                    ↝ Phase 5
+│   │   ├── coordinator/                ↝ Phase 6, 8
+│   │   ├── graph/                      ↝ Phase 9
+│   │   ├── rules/                      ↝ Phase 3
+│   │   │   └── state_machine_rules.py
+│   │   └── tracking/                   ↝ Phase 2+
+│   ├── api/                            ↝ Phase 7
+│   ├── storage/                        ↝ Phase 7
+│   ├── output/                         ↝ observations.json written here at runtime
+│   ├── main.py                         ↝ Phase 7 app entry point
+│   ├── requirements.txt
+│   └── yolo26n.pt                      ↝ downloaded on first run, now cached
+└── docs/
+```
 
-#### Minimum (for MVP development)
-- CPU: Intel i5 / AMD Ryzen 5 or better
-- RAM: 8GB minimum, 16GB recommended
-- Storage: 50GB free space
-- GPU: Not required but recommended (NVIDIA GPU with CUDA support for faster inference)
+See `docs/PROJECT_STATUS.md` for the current build/code status of each directory.
 
-#### Recommended (for production development)
-- CPU: Intel i7 / AMD Ryzen 7 or better
-- RAM: 16GB minimum
-- Storage: 100GB free space
-- GPU: NVIDIA GPU with at least 4GB VRAM and CUDA support
+---
 
-## Installation
+## Environment Setup
 
-### 1. Clone the Repository
+The virtual environment uses **Python 3.13** and lives inside `backend/`.
+
+```powershell
+# Windows PowerShell — run once
+cd d:\SIH\VAHANM\backend
+py -3.13 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python --version          # must print Python 3.13.x
+
+pip install ultralytics opencv-python pyyaml
+```
 
 ```bash
-git clone <repository-url>
-cd vahanm
+# Linux / macOS — run once
+cd /path/to/VAHANM/backend
+python3.13 -m venv .venv
+source .venv/bin/activate
+pip install ultralytics opencv-python pyyaml
 ```
 
-### 2. Backend Setup
-
-#### Install Python Dependencies
-
-```bash
-cd backend
-
-# Create virtual environment (recommended)
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install required packages
-pip install -r requirements.txt
+**Verify the install:**
+```powershell
+python -c "from ultralytics import YOLO; print('OK')"
+python -c "import cv2; print(cv2.__version__)"
 ```
 
-#### Requirements (`backend/requirements.txt`)
+### Common activation mistake
 
-```
-# Core dependencies
-opencv-python>=4.8.0
-numpy>=1.24.0
-ultralytics>=8.0.0  # YOLO v8
-pyyaml>=6.0
-fastapi>=0.100.0
-uvicorn>=0.23.0
-aiofiles>=23.0.0
-python-multipart>=0.0.6
-psycopg2-binary>=2.9.0
-shapely>=2.0.0
-Pillow>=10.0.0
-asyncio>=3.4.3
+The MSYS2/ucrt64 `python` binary (at `C:\msys64\ucrt64\bin\python.exe`) creates a
+venv with a Unix-style `bin/` directory instead of Windows `Scripts/`. Always use
+`py -3.13` (the Windows Python Launcher) to create the venv, not `python`.
+
+```powershell
+# Wrong — MSYS2 python, creates bin/ not Scripts/
+python -m venv .venv
+
+# Correct
+py -3.13 -m venv .venv
 ```
 
-#### PostgreSQL Setup
+---
 
-```bash
-# Install PostgreSQL (if not already installed)
-# Windows: Download from https://www.postgresql.org/download/windows/
-
-# Create database
-psql -U postgres -c "CREATE DATABASE vahanm;"
-
-# Create tables
-psql -U postgres -d vahanm -f schema.sql
-```
-
-#### Configuration
-
-Copy the example config and modify as needed:
-
-```bash
-cp config/example_config.yaml config/config.yaml
-```
-
-Edit `config/config.yaml` with your settings.
-
-### 3. Frontend Setup (Flutter)
-
-```bash
-# Install Flutter (if not already installed)
-# Follow instructions at https://docs.flutter.dev/get-started/install
-
-# Install dependencies
-flutter pub get
-
-# Run the app
-flutter run
-```
-
-## Project Structure
-
-### Backend
+## `requirements.txt`
 
 ```
-backend/
-├── main.py                 # Application entry point
-├── requirements.txt        # Python dependencies
-├── config/
-│   ├── detection.yaml      # YOLO detection configuration
-│   └── config.yaml         # Main configuration
-├── intelligence/
-│   ├── perception/         # Perception layer (YOLO, OCR, etc.)
-│   │   ├── detection/
-│   │   │   ├── __init__.py
-│   │   │   └── yolo_detector.py
-│   │   ├── ocr/
-│   │   └── attributes/
-│   ├── tracking/           # Multi-object tracking
-│   │   ├── tracklet.py
-│   │   ├── tracker.py
-│   │   └── association.py
-│   ├── matching/           # Vehicle matching
-│   │   ├── appearance.py
-│   │   ├── plate.py
-│   │   └── matcher.py
-│   ├── graph/              # Camera/road graph
-│   │   ├── camera_graph.py
-│   │   ├── road_graph.py
-│   │   └── routing.py
-│   ├── rules/              # Violation detection rules
-│   │   ├── speeding.py
-│   │   ├── wrong_way.py
-│   │   └── signal.py
-│   └── coordinator/        # Central coordinator
-│       ├── state.py
-│       └── coordinator.py
-├── media/                  # Media processing
-│   ├── ingestion/
-│   └── transport/
-├── sensors/                # Sensor integration
-│   ├── radar/
-│   └── microphone/
-├── storage/                # Database access
-│   ├── database.py
-│   └── embedding_store.py
-└── api/                    # REST API
-    ├── routes/
-    └── websocket.py
+# ── Phase 1–2 (active) ───────────────────────────────────────────────────────
+ultralytics>=8.2.0        # YOLO26 detection + built-in ByteTrack
+opencv-python>=4.8.0      # video capture and frame I/O
+pyyaml>=6.0               # config file loading
+
+# ── Phase 3 (violation geometry) — uncomment when starting Phase 3 ───────────
+# shapely>=2.0.0
+
+# ── Phase 7 (API + transport) — uncomment when starting Phase 7 ──────────────
+# fastapi>=0.100.0
+# uvicorn>=0.23.0
+
+# ── Phase 7 (database) — uncomment when starting Phase 7 ─────────────────────
+# psycopg2-binary>=2.9.0
+
+# asyncio is part of the Python standard library — do NOT add it here.
 ```
 
-### Frontend (Flutter)
+Uncomment each block only when the corresponding phase becomes active. This keeps
+`pip install -r requirements.txt` fast and the environment clean.
 
+---
+
+## Phase Status
+
+| # | Phase | Primary file(s) |
+|---|-------|-----------------|
+| 1 | First Working Tracker | `intelligence/perception/detection/edge_tracker.py` |
+| 2 | Observation Manager | `intelligence/perception/observation_manager.py` |
+| 3 | Violation Detection | `intelligence/rules/` |
+| 4 | Evidence Capture | `intelligence/perception/evidence_capture.py` |
+| 5 | LPR Capability | `intelligence/perception/lpr/` |
+| 6 | Hypothesis Management | `intelligence/coordinator/` |
+| 7 | FastAPI Transport | `api/`, `main.py` |
+| 8 | Orchestrator | `intelligence/coordinator/orchestrator.py` |
+| 9 | Multi-Cluster Association | `intelligence/graph/` |
+| 10 | Web Platform | `web/` |
+
+Current build status for each phase: see `docs/PROJECT_STATUS.md`.
+
+---
+
+## Phase 1 — First Working Tracker ✅
+
+**File:** `backend/intelligence/perception/detection/edge_tracker.py`
+
+**What it proves:** `video → YOLO26 detection → ByteTrack tracking → observation JSON`
+
+**Model on disk:** `backend/yolo26n.pt` (downloaded automatically on first run,
+now cached)
+
+### Running
+
+```powershell
+cd d:\SIH\VAHANM\backend
+.\.venv\Scripts\Activate.ps1
+
+# Webcam (index 0)
+python intelligence/perception/detection/edge_tracker.py --source 0
+
+# Video file
+python intelligence/perception/detection/edge_tracker.py --source traffic.mp4
+
+# Vehicle classes only (car=2, motorcycle=3, bus=5, truck=7), tighter confidence
+python intelligence/perception/detection/edge_tracker.py `
+    --source traffic.mp4 `
+    --classes 2 3 5 7 `
+    --conf 0.4
+
+# Headless — no display window (servers, scripts)
+python intelligence/perception/detection/edge_tracker.py `
+    --source traffic.mp4 `
+    --no-show
+
+# Cap frames (useful for quick tests)
+python intelligence/perception/detection/edge_tracker.py `
+    --source 0 `
+    --max-frames 300
 ```
-lib/
-├── main.dart              # App entry point
-├── app.dart               # Main application widget
-├── config/
-│   ├── models/            # Data models
-│   ├── themes/            # UI themes
-│   └── constants.dart     # App constants
-└── src/
-    ├── features/
-    │   └── presentation/
-    │       ├── screens/   # Screen widgets
-    │       └── widgets/   # Reusable widgets
-    └── utils/             # Utility functions
+
+**CLI flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--source` | required | File path, URL, or camera index (`0`) |
+| `--output-dir` | `output` | Directory for `observations.json` |
+| `--classes` | None (all) | Space-separated COCO class IDs |
+| `--conf` | `0.35` | Detection confidence threshold |
+| `--max-frames` | None | Stop after N frames |
+| `--no-save` | off | Skip writing `observations.json` |
+| `--no-show` | off | Skip the OpenCV display window |
+
+### Output — `output/observations.json`
+
+The exact schema produced by the current code:
+
+```json
+{
+  "metadata": {
+    "source": "edge_tracker",
+    "version": "1.0.0",
+    "generated_at": "2026-09-03T14:22:01.123456",
+    "total_observations": 847
+  },
+  "observations": [
+    {
+      "frame": 1,
+      "timestamp": "2026-09-03T14:22:01.130000",
+      "track_id": 3,
+      "class_id": 2,
+      "class_name": "car",
+      "confidence": 0.8712,
+      "bbox": {
+        "x1": 142.3,
+        "y1": 210.1,
+        "x2": 389.7,
+        "y2": 401.5
+      },
+      "centroid": {
+        "x": 266.0,
+        "y": 305.8
+      },
+      "dimensions": {
+        "width": 247.4,
+        "height": 191.4
+      }
+    }
+  ]
+}
 ```
 
-## Core Components
+**Important:** `timestamp` is wall-clock time at the moment the frame is processed,
+not a video timestamp. For live cameras this is close enough. For recorded video being
+replayed faster or slower than real-time, the timestamp will not match the original
+capture time. This is a known limitation to address in Phase 2 when the observation
+schema is formalised.
 
-### 1. YOLO Detector
+**Important:** `track_id` is a device-local ByteTrack integer. It is not a global
+vehicle identity. Two cameras running simultaneously will both produce a `track_id=3`
+that refer to different vehicles.
 
-The YOLO (You Only Look Once) detector is the primary vehicle detection component.
-
-#### What is YOLO?
-
-YOLO is a real-time object detection algorithm that:
-- Processes the entire image in a single forward pass
-- Predicts multiple bounding boxes and class probabilities
-- Very fast compared to R-CNN variants
-- Good tradeoff between speed and accuracy
-
-#### How YOLO Works
-
-1. **Image Division**: The input image is divided into a grid (e.g., 416x416 pixels)
-2. **Grid Prediction**: Each grid cell predicts bounding boxes and class probabilities
-3. **Non-Maximum Suppression (NMS)**: Overlapping boxes are filtered to keep the best predictions
-
-#### YOLO Model Sizes
-
-Ultralytics YOLOv8 provides multiple model sizes:
-
-| Model | Size | Parameters | mAP (val) | Speed (CPU) | Speed (GPU) |
-|-------|------|------------|-----------|-------------|-------------|
-| YOLOv8n | 6.3 MB | 3.2 M | 37.3 | 454.6 ms | 1.5 ms |
-| YOLOv8s | 22.0 MB | 11.2 M | 44.9 | 489.8 ms | 1.7 ms |
-| YOLOv8m | 52.4 MB | 25.9 M | 50.2 | 521.4 ms | 2.3 ms |
-| YOLOv8l | 98.1 MB | 43.7 M | 52.9 | 570.0 ms | 3.1 ms |
-| YOLOv8x | 170.8 MB | 68.2 M | 53.9 | 605.9 ms | 4.5 ms |
-
-**Recommendation for VAHANM**: Start with `yolov8n.pt` (nano) for speed, upgrade to `yolov8s.pt` (small) or larger if accuracy is insufficient.
-
-#### Using the YOLO Detector
+### EdgeTracker class API
 
 ```python
-from backend.intelligence.perception.detection import create_detector
+from intelligence.perception.detection.edge_tracker import EdgeTracker
 
-# Create detector with default configuration
-detector = create_detector()
+tracker = EdgeTracker(
+    model_path="yolo26n.pt",   # default
+    tracker_config="bytetrack.yaml",
+    classes=[2, 3, 5, 7],
+    conf=0.35,
+    iou=0.7,
+    imgsz=640,
+)
 
-# Detect objects in a frame
-import cv2
-frame = cv2.imread("test_image.jpg")
-results = detector.detect(frame)
+observations = tracker.track(
+    source="traffic.mp4",
+    output_dir="output",
+    max_frames=None,
+    save_output=True,
+    show=True,
+)
 
-# Extract results
-for box in results.boxes:
-    x1, y1, x2, y2 = box.xyxy[0].tolist()
-    confidence = box.conf[0].item()
-    class_id = int(box.cls[0])
-    class_name = detector.classes[class_id]
-    print(f"Found {class_name} with confidence {confidence:.2f}")
+# Inspect results
+unique_ids = tracker.get_unique_tracks()          # List[int]
+car_obs    = tracker.get_observations_by_track(3) # List[dict]
+tracker.reset()                                   # clear state for reuse
 ```
 
-#### Configuration Options
+### Underlying Ultralytics API
 
-Edit `backend/config/detection.yaml` to customize:
-
-```yaml
-model_path: "yolov8n.pt"           # Model file
-conf_threshold: 0.25               # Minimum confidence
-iou_threshold: 0.45                # NMS threshold
-device: "cuda"                     # "cuda" or "cpu"
-imgsz: 640                         # Image size
-```
-
-#### Supported Classes
-
-By default, YOLO detects all COCO dataset classes:
-
-| Class ID | Class Name |
-|----------|------------|
-| 0 | person |
-| 1 | bicycle |
-| 2 | car |
-| 3 | motorcycle |
-| 4 | airplane |
-| 5 | bus |
-| 6 | train |
-| 7 | truck |
-| 8 | boat |
-| ... | ... |
-
-For VAHANM, commonly used classes are:
-- `2` - car
-- `3` - motorcycle
-- `5` - bus
-- `7` - truck
-
-Configure classes in `detection.yaml`:
-
-```yaml
-classes: [2, 3, 5, 7]  # Only detect vehicles
-```
-
-### 2. ByteTrack Tracker
-
-ByteTrack is a multi-object tracker that maintains consistent IDs across frames.
-
-#### How ByteTrack Works
-
-1. **Detection association**: Matches detections across frames
-2. **Tracklet creation**: Creates short track segments
-3. **Tracklet linking**: Links tracklets into full tracks
-4. **Identity maintenance**: Maintains consistent track IDs
-
-#### Usage
+`EdgeTracker` is a thin wrapper. The core call is:
 
 ```python
-from byte_track import ByteTrack
+for result in model.track(
+    source=source,
+    tracker="bytetrack.yaml",   # built-in — do NOT install a separate byte_track package
+    classes=self.classes,
+    conf=self.conf,
+    iou=self.iou,
+    imgsz=self.imgsz,
+    stream=True,
+    verbose=False,
+    show=show,
+):
+    if result.boxes.id is None:   # no tracks yet — always guard this
+        continue
 
-# Create tracker
-tracker = ByteTrack()
-
-# Update with detections
-tracks = tracker.update(detections)
+    for box, track_id in zip(result.boxes, result.boxes.id):
+        tid   = int(track_id.item())
+        cls   = int(box.cls.item())
+        conf  = float(box.conf.item())
+        x1,y1,x2,y2 = box.xyxy[0].tolist()
 ```
 
-### 3. OCR/LPR Engine
+`result.boxes.id` returns a `torch.Tensor` or `None`. Call `.item()` to extract a
+Python scalar. Do not compare the tensor directly with `== None` — use `is None`.
 
-The OCR (Optical Character Recognition) engine extracts license plate text from images.
+### COCO vehicle class IDs
 
-#### Requirements
+| ID | Class | Notes |
+|----|-------|-------|
+| 2 | car | sedans, hatchbacks, SUVs |
+| 3 | motorcycle | includes scooters |
+| 5 | bus | includes minibuses |
+| 7 | truck | includes lorries, trailers |
 
-- Deep learning OCR model (>90% accuracy target per PS)
-- Support for Indian license plate formats
-- Robustness to poor lighting, motion blur, dirty plates
+Pass `--classes 2 3 5 7` to ignore pedestrians, bicycles, and all other COCO classes.
 
-#### Implementation Status
+### Performance observed (tested)
 
-The OCR component is a primary ML development target for VAHANM.
+| Source | Hardware | FPS |
+|--------|----------|-----|
+| 640×480 webcam, yolo26n | CPU (Intel i5, no GPU) | ~22–24 FPS after warmup |
 
-## Development Workflow
+GPU will be significantly faster. First ~50 frames are slower while ByteTrack
+initialises track state — this is normal.
 
-### 1. Setting Up YOLO for Development
+---
 
-```bash
-# Install ultralytics
-pip install ultralytics
+## `yolo_detector.py` — Secondary Component
 
-# Test YOLO
-python -c "from ultralytics import YOLO; model = YOLO('yolov8n.pt'); results = model('bus.jpg'); results.show()"
+`backend/intelligence/perception/detection/yolo_detector.py` is a feature-rich
+wrapper around Ultralytics that predates `edge_tracker.py`.
 
-# Or use our wrapper
-python -c "from backend.intelligence.perception.detection import create_detector; detector = create_detector(); print(detector.get_classes())"
-```
+**Current state:** it references `yolo26n.pt` internally (the `model_path`
+default in the class). `config/detection.yaml` correctly points to `yolo26n.pt`.
+`YOLODetector` via `create_detector()` will use `yolo26n.pt` by default, or you can
+pass a config that specifies a different variant.
 
-### 2. Testing Detection
+**When to use which:**
 
-```bash
-# Test with image
-python -c "
-import cv2
-from backend.intelligence.perception.detection import create_detector
+| Component | Use for |
+|-----------|---------|
+| `EdgeTracker` (`edge_tracker.py`) | All new tracking work — Phase 1 onwards |
+| `YOLODetector` (`yolo_detector.py`) | Detection-only (no tracking), or if you need per-frame `detect()` calls |
 
-detector = create_detector()
-frame = cv2.imread('test_image.jpg')
-results = detector.detect(frame, return_type='boxes')
-print(f'Found {len(results)} objects:')
-for box in results:
-    print(f'  {box[\"class_name\"]} ({box[\"confidence\"]:.2f})')
-"
+`YOLODetector` exposes `detect(frame)`, `detect_video()`, `_extract_crops()` — useful
+if Phase 4 (evidence capture) needs to crop individual vehicle regions without
+running ByteTrack.
 
-# Test with video
-python -c "
-import cv2
-from backend.intelligence.perception.detection import create_detector
+**Known issue in `yolo_detector.py`:** `half_precision: true` is the hardcoded
+default in the class (`__init__`), which will error on CPU. Override it with
+`config={"half_precision": False}` when not on a CUDA GPU, or use `detection.yaml`
+which now defaults to `false`.
 
-detector = create_detector()
-cap = cv2.VideoCapture(0)  # Laptop camera
+---
 
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        break
-    
-    results = detector.detect(frame, return_type='boxes')
-    
-    # Draw boxes
-    for box in results:
-        x1, y1 = int(box['x1']), int(box['y1'])
-        x2, y2 = int(box['x2']), int(box['y2'])
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.putText(frame, f'{box[\"class_name\"]} {box[\"confidence\"]:.2f}', 
-                   (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-    
-    cv2.imshow('YOLO Detection', frame)
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+## Phase 2 — Observation Manager ❳
 
-cap.release()
-cv2.destroyAllWindows()
-"
-```
+**What it proves:** observations are filtered before storage; a dense scene does not
+produce hundreds of redundant records per second.
 
-### 3. Integration with Tracking
+**Design reference:** `02_REASONING_AND_ORCHESTRATION.md Section 2`
+
+**File to create:** `backend/intelligence/perception/observation_manager.py`
+
+The Observation Manager wraps the per-frame output of `EdgeTracker` and applies
+per-track quality scoring before an observation is retained or escalated.
+
+**Interface:**
 
 ```python
-from backend.intelligence.perception.detection import create_detector
-from backend.intelligence.tracking import ByteTrack
+from dataclasses import dataclass
+from enum import Enum
 
-detector = create_detector()
-tracker = ByteTrack()
+class Disposition(Enum):
+    DISCARD  = "discard"
+    RETAIN   = "retain"
+    ESCALATE = "escalate"
 
-cap = cv2.VideoCapture(0)
+@dataclass
+class ObservationManager:
+    min_detection_conf:  float = 0.35
+    min_track_age:       int   = 3      # frames before track is considered stable
+    min_motion_px:       float = 5.0    # centroid must move this far since last retain
+    min_plate_vis:       float = 0.3    # plate_visibility threshold to trigger ESCALATE
 
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        break
-    
-    # Detect
-    detections = detector.detect(frame, return_type='boxes')
-    
-    # Track
-    tracklets = tracker.update(detections)
-    
-    # Display
-    for track in tracklets:
-        x1, y1, x2, y2 = track['bbox']
-        track_id = track['track_id']
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.putText(frame, f'ID {track_id}', (x1, y1 - 10), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-    
-    cv2.imshow('Tracking', frame)
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-cap.release()
-cv2.destroyAllWindows()
+    def evaluate(self, observation: dict, track_window: dict) -> Disposition:
+        ...
 ```
+
+**TrackWindow state** (maintained in memory per track_id, not persisted):
+
+```python
+track_window = {
+    "local_track_id":          int,
+    "age_frames":              int,
+    "last_retained_centroid":  (float, float) | None,
+    "last_retained_timestamp": str | None,
+    "retained_count":          int,
+    "escalated_count":         int,
+}
+```
+
+**Start simple:** implement threshold rules on `detection_conf`, `age_frames`, and
+centroid displacement. Add `blur_score` (Laplacian variance of the cropped bbox
+region) once the basic filter is working.
+
+**Integration point:** call `ObservationManager.evaluate()` inside the
+`EdgeTracker.track()` loop, replacing the unconditional `self.observations.append()`.
+
+---
+
+## Phase 3 — Violation Detection ❳
+
+**What it proves:** a rule fires correctly against world state.
+
+**Design reference:** `02_REASONING_AND_ORCHESTRATION.md Section 6`
+
+**Dependency to add:** `shapely>=2.0.0` (uncomment in `requirements.txt`)
+
+**Directory:** `backend/intelligence/rules/`
+
+**Start with `LineCrossingRule`** — the simplest geometrically verifiable rule, and
+the most common traffic violation trigger:
+
+```python
+# backend/intelligence/rules/line_crossing.py
+from shapely.geometry import LineString, Point
+from dataclasses import dataclass
+
+@dataclass
+class RuleResult:
+    triggered:      bool
+    violation_type: str
+    confidence:     float
+    explanation:    str
+
+class LineCrossingRule:
+    rule_id = "line_crossing_v1"
+
+    def __init__(self, forbidden_line: list[tuple[float, float]], direction: str = "any"):
+        self.line = LineString(forbidden_line)
+        self.direction = direction   # "any" | "left_to_right" | "right_to_left"
+
+    def evaluate(self, prev_centroid, curr_centroid, track_conf: float) -> RuleResult:
+        segment = LineString([prev_centroid, curr_centroid])
+        triggered = segment.crosses(self.line)
+        return RuleResult(
+            triggered=triggered,
+            violation_type="LINE_CROSSING",
+            confidence=track_conf if triggered else 0.0,
+            explanation="centroid path crossed forbidden line" if triggered else "",
+        )
+```
+
+**Integration:** `edge_tracker.py` already stores `centroid` per frame and `track_id`
+per observation — the consecutive centroids needed by `LineCrossingRule` are already
+in `observations`. Phase 3 reads consecutive observations for the same `track_id` and
+runs `evaluate()` on each consecutive pair.
+
+**Do not** put OCR, database writes, or capability activation inside a rule. A rule
+returns a `RuleResult`. The Orchestrator (Phase 8) acts on it.
+
+---
+
+## Phase 4 — Evidence Capture ❳
+
+**What it proves:** a violation produces an immutable, storable evidence record.
+
+**Design reference:** `02_REASONING_AND_ORCHESTRATION.md Section 3`
+
+Evidence records are frozen after creation. A second capability invocation creates a
+new record; it does not overwrite the first.
+
+```python
+# backend/intelligence/perception/evidence_capture.py
+from dataclasses import dataclass, field
+from typing import Tuple
+import uuid
+
+@dataclass(frozen=True)
+class Evidence:
+    evidence_id:          str
+    investigation_id:     str
+    goal:                 str          # "VIOLATION_FRAME" | "PLATE_OCR" | ...
+    observation_ids:      tuple        # immutable; subset selected for this evidence
+    produced_by:          str          # capability id, e.g. "evidence_capture_v1"
+    timestamp_produced:   str          # ISO8601
+    result:               dict = field(default_factory=dict)
+    # result keys for VIOLATION_FRAME:
+    #   frame_path: str   (relative path to saved .jpg)
+    #   bbox: dict        (x1,y1,x2,y2 of the vehicle in the frame)
+    #   track_id: int
+    #   violation_type: str
+```
+
+**Frame selection:** from the N frames surrounding the violation timestamp, pick the
+one with the highest `bbox.width * bbox.height` (largest = closest/clearest) where
+`detection_conf >= 0.5`. Save it as a JPEG to `output/evidence/`.
+
+`YOLODetector._extract_crops()` already implements the crop-with-padding logic and
+can be reused here.
+
+---
+
+## Phase 5 — LPR Capability ❳
+
+**What it proves:** OCR runs on demand, not on every frame.
+
+**Design reference:** `02_REASONING_AND_ORCHESTRATION.md Section 5, 8.3`
+
+**OCR engine:** not yet selected. The interface below must be satisfied regardless of
+engine. Do not import a specific OCR library at the module level before it is chosen.
+
+```python
+# backend/intelligence/perception/lpr/base.py
+
+class LPRCapability:
+    capability_id = "lpr_v1"
+
+    def run(self, crop_paths: list[str]) -> "PlateHypothesis":
+        """
+        Run OCR on a list of pre-selected plate crops.
+        Returns a PlateHypothesis. Does not select crops — that is the
+        EvidenceSelector's job.
+        """
+        raise NotImplementedError
+
+@dataclass
+class PlateHypothesis:
+    best_text:             str            # e.g. "DL8CAX1234" or "" if indeterminate
+    character_confidences: list[float]    # one per character in best_text
+    supporting_reads:      int            # OCR results agreeing on best_text
+    contradictions:        int            # conflicting reads
+    sufficiency:           str            # NONE | LOW | MEDIUM | HIGH | CONFIRMED
+```
+
+**Engine candidates for evaluation (not yet decided):**
+
+| Engine | Strengths | Weaknesses |
+|--------|-----------|------------|
+| EasyOCR | simple API, good multilingual | slow on CPU |
+| PaddleOCR | fast, accurate | large dependency footprint |
+| Tesseract | mature, well-documented | poor on angled/partial plates |
+| Custom fine-tuned | best accuracy on Indian plates | requires labelled training data |
+
+Benchmark on real plate crops before committing. The interface above insulates
+everything else from the choice.
+
+---
+
+## Phase 6 — Hypothesis Management ❳
+
+**What it proves:** the system maintains competing identity candidates and backtracks
+when evidence contradicts the leading hypothesis.
+
+**Design reference:** `02_REASONING_AND_ORCHESTRATION.md Section 4, 9`
+
+`VehicleHypothesis` and `IdentityHypothesis` live in memory in the central tier until
+an investigation commits. Start with **likelihood scoring** as the fusion method:
+
+```python
+# backend/intelligence/coordinator/evidence_fusion.py
+
+WEIGHTS = {
+    "plate_similarity":      0.40,
+    "appearance_similarity": 0.35,
+    "temporal_feasibility":  0.15,
+    "direction_consistency": 0.10,
+}
+
+def likelihood_score(evidence_set: list, hypothesis_id: str) -> float:
+    return sum(
+        WEIGHTS.get(e["goal"], 0.0) * e["result"].get("confidence", 0.0)
+        for e in evidence_set
+        if e["goal"] in WEIGHTS
+    )
+```
+
+The weights are configurable. The fusion interface is fixed — a Bayesian or learned
+method can replace this without changing any caller.
+
+---
+
+## Phase 7 — FastAPI Transport ❳
+
+**What it proves:** edge observations reach the central system reliably.
+
+**Dependencies to add:** `fastapi>=0.100.0`, `uvicorn>=0.23.0`, `psycopg2-binary>=2.9.0`
+
+**Important:** use FastAPI's **native WebSocket**, not Socket.IO. They are different
+protocols. Do not mix them.
+
+```python
+# backend/api/websocket.py
+from fastapi import FastAPI, WebSocket
+
+app = FastAPI()
+
+@app.websocket("/ws/edge/{cluster_id}")
+async def edge_feed(websocket: WebSocket, cluster_id: str):
+    await websocket.accept()
+    while True:
+        data = await websocket.receive_json()
+        # compact observation event — no video bytes
+        await ingest_observation(cluster_id, data)
+```
+
+`main.py` is currently empty — it becomes the FastAPI app entry point in Phase 7.
+
+---
+
+## Phase 8 — Orchestrator ❳
+
+**Design reference:** `02_REASONING_AND_ORCHESTRATION.md Section 11`
+
+The Orchestrator runs as an async coroutine in the central tier. It is the only
+component that invokes capabilities. Rules fire; the Orchestrator decides what to do
+with a fired rule.
+
+**Directory:** `backend/intelligence/coordinator/`
+
+---
+
+## Phase 9 — Multi-Cluster Association ❳
+
+**Design reference:** `02_REASONING_AND_ORCHESTRATION.md Section 13–14`
+
+**Dependencies to add:** `networkx>=3.0`
+
+The road graph stores clusters as nodes, road segments as directed edges with
+`min_travel_time_sec` and `max_travel_time_sec` attributes. Temporal feasibility
+filtering runs cheaply on the graph before any appearance comparison.
+
+**Directory:** `backend/intelligence/graph/`
+
+---
+
+## Phase 10 — Web Platform ❳
+
+**Framework decision:** choose one of React, Vue, or Angular when Phase 10 begins.
+Do not create scaffolding before Phase 7 (the WebSocket feed) is stable.
+
+**Maps:** Leaflet (no API key) or Mapbox GL JS (key required). Decide at Phase 10
+start; do not import both.
+
+**Minimum viable dashboard:**
+1. Live map with vehicle markers (WebSocket feed)
+2. Violation log table
+3. Investigation detail view (hypothesis scores, evidence, decision history)
+
+---
 
 ## Troubleshooting
 
-### Common Issues
+### `ModuleNotFoundError: No module named 'ultralytics'`
 
-#### 1. YOLO Import Error
+The venv is not activated, or packages were installed to the wrong Python.
 
-```
-ModuleNotFoundError: No module named 'ultralytics'
-```
-
-**Solution**: Install ultralytics
-
-```bash
-pip install ultralytics
+```powershell
+cd d:\SIH\VAHANM\backend
+.\.venv\Scripts\Activate.ps1
+pip show ultralytics    # should show path inside .venv
 ```
 
-#### 2. CUDA Out of Memory
+### Packages install to global Python, not venv
 
-```
-RuntimeError: CUDA out of memory
-```
-
-**Solutions**:
-- Use smaller model: `yolov8n.pt` instead of `yolov8x.pt`
-- Reduce `imgsz` in config
-- Close other GPU applications
-- Use CPU instead: `device: "cpu"`
-
-#### 3. Slow Inference
-
-**Solutions**:
-- Use smaller model (nano or small)
-- Enable half precision: `half_precision: true`
-- Use GPU if available
-- Reduce image size: `imgsz: 320` or `416`
-
-#### 4. Poor Detection Accuracy
-
-**Solutions**:
-- Use larger model: `yolov8s.pt` or larger
-- Lower confidence threshold: `conf_threshold: 0.15`
-- Ensure proper lighting conditions
-- Consider fine-tuning on vehicle-specific dataset
-
-### Performance Optimization
-
-#### GPU Acceleration
-
-```bash
-# Check if CUDA is available
-python -c "import torch; print(torch.cuda.is_available())"
-
-# Use GPU in config
-device: "cuda"
+```powershell
+pip --version
+# must show a path inside d:\SIH\VAHANM\backend\.venv\
+# if it shows D:\softwares\python\ the venv is not active
 ```
 
-#### Model Quantization
+### `Activate.ps1 cannot be loaded — execution policy`
 
-```bash
-# Export to ONNX for faster inference
-python -c "
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+```
+
+### `result.boxes.id is None` on every frame
+
+Normal for the first few frames while ByteTrack initialises. If it persists:
+- Confirm detections are actually happening: check `len(result.boxes) > 0`
+- Lower `--conf` to get more detections for ByteTrack to latch onto
+- ByteTrack needs at least 2–3 consistent detections to assign an ID
+
+### `results.show()` crashes or errors
+
+`model.predict()` returns a **list**. Call `results[0].show()`, not `results.show()`.
+On headless servers, use `save=True` instead:
+
+```python
+results = model.predict(source="image.jpg", save=True)
+# output in runs/detect/predict/image.jpg
+```
+
+Or explicitly: `result.save(filename="output.jpg")`.
+
+### `half_precision` error on CPU
+
+```
+RuntimeError: "slow_conv2d_cpu" not implemented for 'Half'
+```
+
+`yolo_detector.py` defaults `half_precision=True` internally. Override:
+
+```python
+detector = YOLODetector(config={"half_precision": False})
+```
+
+Or use `config/detection.yaml` which now correctly sets `half_precision: false`.
+
+### `lap` package auto-installed by Ultralytics on first run
+
+On first tracking run, Ultralytics detects that `lap` (Linear Assignment Problem
+solver, needed by ByteTrack) is missing and auto-installs it. This is expected. You
+will see:
+
+```
+requirements: Ultralytics requirement ['lap>=0.5.12'] not found, attempting AutoUpdate...
+```
+
+It installs `lap` into the active venv. Subsequent runs skip this step.
+
+---
+
+## GPU Acceleration
+
+```powershell
+python -c "import torch; print('CUDA:', torch.cuda.is_available())"
+```
+
+YOLO will automatically use a CUDA GPU if available. Force CPU with:
+
+```python
+model = YOLO("yolo26n.pt")
+model.to("cpu")
+```
+
+`half_precision` (FP16) provides a ~2× speed boost on NVIDIA GPUs. It requires CUDA.
+Do not enable it in config unless `torch.cuda.is_available()` returns `True`.
+
+---
+
+## Model Export (production only)
+
+Only export when model weights are finalised. Do not export during active development.
+
+```python
 from ultralytics import YOLO
-model = YOLO('yolov8n.pt')
-model.export(format='onnx', dynamic=True)
-"
+model = YOLO("yolo26n.pt")
+model.export(format="onnx")              # portable CPU/GPU
+model.export(format="engine", device=0)  # TensorRT, NVIDIA only
 ```
 
-## Next Steps
+---
 
-1. **Setup ByteTrack** for multi-object tracking
-2. **Implement OCR** for license plate recognition
-3. **Create cluster architecture** for multi-camera support
-4. **Build violation detection** rules
-5. **Implement cross-cluster association** for vehicle tracking
+## Reference Links
 
-## Web Platform Setup
+| Resource | URL |
+|----------|-----|
+| Ultralytics tracking | https://docs.ultralytics.com/modes/track |
+| Ultralytics prediction | https://docs.ultralytics.com/modes/predict |
+| Results API | https://docs.ultralytics.com/modes/predict/#working-with-results |
+| FastAPI | https://fastapi.tiangolo.com |
+| Shapely | https://shapely.readthedocs.io |
+| NetworkX | https://networkx.org |
+| Ultralytics license | https://www.ultralytics.com/license |
 
-### 1. Project Setup
-
-```bash
-# Create web platform directory
-mkdir web-platform
-cd web-platform
-
-# Choose a framework and set up project
-# React
-npx create-react-app vahanm-web
-cd vahanm-web
-
-# Vue
-npm create vue@latest vahanm-web
-cd vahanm-web
-
-# Angular
-ng new vahanm-web
-cd vahanm-web
-```
-
-### 2. Install Dependencies
-
-```bash
-# Map visualization
-npm install leaflet react-leaflet
-# or
-npm install vue2-leaflet
-
-# Charts and analytics
-npm install chart.js react-chartjs-2
-# or
-npm install vue-chartjs
-
-# WebSocket for real-time data
-npm install socket.io-client
-```
-
-### 3. Basic Structure
-
-```
-web-platform/
-├── public/
-├── src/
-│   ├── components/
-│   │   ├── CameraFeed.vue
-│   │   ├── VehicleList.vue
-│   │   ├── ViolationAlert.vue
-│   │   └── TrafficAnalytics.vue
-│   ├── pages/
-│   │   ├── Dashboard.vue
-│   │   ├── VehicleSearch.vue
-│   │   ├── TrafficMap.vue
-│   │   └── Analytics.vue
-│   ├── services/
-│   │   ├── api.js
-│   │   ├── websocket.js
-│   │   └── mapService.js
-│   ├── App.vue
-│   └── main.js
-├── package.json
-└── README.md
-```
-
-### 4. Connecting to Backend
-
-```javascript
-// src/services/api.js
-import axios from 'axios';
-
-const API_BASE_URL = 'http://localhost:8000/api';
-
-export const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-});
-
-// Example: Get vehicles
-export const getVehicles = async () => {
-  const response = await api.get('/vehicles');
-  return response.data;
-};
-
-// Example: Get violations
-export const getViolations = async () => {
-  const response = await api.get('/violations');
-  return response.data;
-};
-```
-
-### 5. WebSocket for Real-time Updates
-
-```javascript
-// src/services/websocket.js
-import io from 'socket.io-client';
-
-const SOCKET_URL = 'http://localhost:8000';
-
-export const socket = io(SOCKET_URL, {
-  transports: ['websocket']
-});
-
-// Listen for new vehicles
-socket.on('vehicle_detected', (data) => {
-  console.log('New vehicle detected:', data);
-  // Update UI
-});
-
-// Listen for violations
-socket.on('violation', (data) => {
-  console.log('Violation detected:', data);
-  // Show alert
-});
-```
-
-### 6. Map Integration
-
-```javascript
-// src/components/TrafficMap.vue
-import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
-
-const TrafficMap = ({ vehicles, routes }) => {
-  return (
-    <MapContainer center={[12.9716, 77.5946]} zoom={12} style={{ height: '100vh' }}>
-      <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='&copy; OpenStreetMap contributors'
-      />
-      {vehicles.map(vehicle => (
-        <Marker
-          key={vehicle.id}
-          position={[vehicle.latitude, vehicle.longitude]}
-          popupContent={vehicle.plate}
-        />
-      ))}
-      {routes.map((route, index) => (
-        <Polyline
-          key={index}
-          positions={route.coordinates}
-          color="blue"
-          weight={2}
-        />
-      ))}
-    </MapContainer>
-  );
-};
-```
-
-### 7. Running the Web Platform
-
-```bash
-# Start backend
-cd ../backend
-python -m uvicorn main:app --reload
-
-# Start web platform
-cd ../web-platform
-npm start
-```
-
-Visit `http://localhost:3000` to see your web platform.
+---
 
 ## Contributing
 
-See `docs/04_CONTRIBUTING.md` for contribution guidelines.
+See `04_CONTRIBUTING.md`.
+

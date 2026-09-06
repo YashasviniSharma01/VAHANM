@@ -1,12 +1,24 @@
-# Core dependencies
+# Core dependencies for VAHANM MVP
+# Install with: pip install -r requirements.txt
+
+# Ultralytics YOLO26 (includes ByteTrack)
+ultralytics>=8.2.0
+
+# OpenCV for video processing
 opencv-python>=4.8.0
-numpy>=1.24.0
-ultralytics>=8.0.0
+
+# Configuration
 pyyaml>=6.0
-fastapi>=0.100.0
-uvicorn>=0.23.0
-aiofiles>=23.0.0
-python-multipart>=0.0.6
-psycopg2-binary>=2.9.0
-shapely>=2.0.0
-Pillow>=10.0.0
+
+# FastAPI for web API (later phases)
+# fastapi>=0.100.0
+# uvicorn>=0.23.0
+
+# Database (later phases)
+# psycopg2-binary>=2.9.0
+
+# Geometry for violation detection (later phases)
+# shapely>=2.0.0
+
+# Async support (later phases)
+# aiofiles>=23.0.0

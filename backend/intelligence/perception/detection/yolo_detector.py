@@ -1,7 +1,7 @@
 """
 YOLO v8 Detector for Vehicle Detection
 
-This module provides a wrapper around Ultralytics YOLOv8 for vehicle detection
+This module provides a wrapper around Ultralytics yolov26 for vehicle detection
 in traffic camera feeds.
 
 Usage:
@@ -59,7 +59,7 @@ class YOLODetector:
         
         # Default configuration
         self.default_config = {
-            "model_path": "yolov8n.pt",  # Default: smallest model for speed
+            "model_path": "yolo26n.pt",  # Default: YOLO26n for VAHANM edge tracker
             "model_size": "n",  # n, s, m, l, x
             "classes": None,  # None = all classes, or list of class indices
             "conf_threshold": 0.25,
@@ -107,7 +107,7 @@ class YOLODetector:
         
         # Build model path if only size specified
         if not model_path.endswith('.pt') and not model_path.endswith('.yaml'):
-            model_path = f"yolov8{model_size}.pt"
+            model_path = f"yolo26{model_size}.pt"
         
         logger.info(f"Loading YOLO model: {model_path}")
         logger.info(f"Using device: {self.config['device']}")
