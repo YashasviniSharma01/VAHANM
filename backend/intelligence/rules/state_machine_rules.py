@@ -74,7 +74,6 @@ class Tracklet:
     Maintains chronological centroids, confidences, and bounding boxes.
     
     Attributes representing detected real-world identity are explicit.
-    No phantom defaults to hardcoded classes (e.g. COCO car=2).
     """
     tracklet_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     cluster_id: Optional[str] = None
