@@ -10,10 +10,6 @@ env/
 venv/
 ENV/
 
-
-learning_guide
-
-
 # Model Weights & Large Binaries
 *.pt
 *.onnx
