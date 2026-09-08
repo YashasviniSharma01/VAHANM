@@ -1,0 +1,33 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+.venv/
+backend/.venv/
+env/
+venv/
+ENV/
+
+
+learning_guide
+
+
+# Model Weights & Large Binaries
+*.pt
+*.onnx
+*.engine
+
+# Output directories
+backend/output/
+output/
+runs/
+
+# IDE and Editor files
+.vscode/
+.idea/
+.kilo/
+*.swp
+*.swo
+

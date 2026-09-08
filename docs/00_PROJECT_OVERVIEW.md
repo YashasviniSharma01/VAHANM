@@ -15,8 +15,14 @@ through a city-wide road network.
 
 The central design question VAHANM answers is not:
 
-<<<<<<< HEAD
-=======
+> "Where is the vehicle?"
+
+It is:
+
+> "Given an event, how do we spend the minimum amount of computational and sensing
+> resources necessary to establish what happened, and collect evidence that can stand
+> up to scrutiny?"
+
 **Core Insight:** A node is a collection of heterogeneous devices (cameras, radars, microphones), not only a camera. Devices have independent identities and capabilities, while the node/cluster coordinates their operations.
 
 The primary design principle is:
@@ -432,7 +438,6 @@ This is essentially adaptive computation at the infrastructure level.
 ### The Real Value Proposition
 
 VAHANM isn't just about:
->>>>>>> 4169d767e92d05f55744376ec5fec3b9ef9a0e73
 > "Where is the vehicle?"
 
 It is:

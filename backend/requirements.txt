@@ -17,8 +17,8 @@ pyyaml>=6.0
 # Database (later phases)
 # psycopg2-binary>=2.9.0
 
-# Geometry for violation detection (later phases)
-# shapely>=2.0.0
+# Geometry for violation detection (Phase 3)
+shapely>=2.0.0
 
 # Async support (later phases)
 # aiofiles>=23.0.0

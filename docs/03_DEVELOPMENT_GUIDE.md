@@ -69,23 +69,10 @@ pip install ultralytics opencv-python pyyaml
 ```
 
 **Verify the install:**
+
 ```powershell
 python -c "from ultralytics import YOLO; print('OK')"
 python -c "import cv2; print(cv2.__version__)"
-```
-
-### Common activation mistake
-
-The MSYS2/ucrt64 `python` binary (at `C:\msys64\ucrt64\bin\python.exe`) creates a
-venv with a Unix-style `bin/` directory instead of Windows `Scripts/`. Always use
-`py -3.13` (the Windows Python Launcher) to create the venv, not `python`.
-
-```powershell
-# Wrong — MSYS2 python, creates bin/ not Scripts/
-python -m venv .venv
-
-# Correct
-py -3.13 -m venv .venv
 ```
 
 ---
@@ -119,7 +106,7 @@ Uncomment each block only when the corresponding phase becomes active. This keep
 ## Phase Status
 
 | # | Phase | Primary file(s) |
-|---|-------|-----------------|
+| --- | ------- | ----------------- |
 | 1 | First Working Tracker | `intelligence/perception/detection/edge_tracker.py` |
 | 2 | Observation Manager | `intelligence/perception/observation_manager.py` |
 | 3 | Violation Detection | `intelligence/rules/` |
@@ -176,7 +163,7 @@ python intelligence/perception/detection/edge_tracker.py `
 **CLI flags:**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+| ------ | --------- | ------------- |
 | `--source` | required | File path, URL, or camera index (`0`) |
 | `--output-dir` | `output` | Directory for `observations.json` |
 | `--classes` | None (all) | Space-separated COCO class IDs |
@@ -294,7 +281,7 @@ Python scalar. Do not compare the tensor directly with `== None` — use `is Non
 ### COCO vehicle class IDs
 
 | ID | Class | Notes |
-|----|-------|-------|
+| ---- | ------- | ------- |
 | 2 | car | sedans, hatchbacks, SUVs |
 | 3 | motorcycle | includes scooters |
 | 5 | bus | includes minibuses |
@@ -525,7 +512,7 @@ class PlateHypothesis:
 **Engine candidates for evaluation (not yet decided):**
 
 | Engine | Strengths | Weaknesses |
-|--------|-----------|------------|
+| -------- | ----------- | ------------ |
 | EasyOCR | simple API, good multilingual | slow on CPU |
 | PaddleOCR | fast, accurate | large dependency footprint |
 | Tesseract | mature, well-documented | poor on angled/partial plates |
@@ -632,6 +619,7 @@ Do not create scaffolding before Phase 7 (the WebSocket feed) is stable.
 start; do not import both.
 
 **Minimum viable dashboard:**
+
 1. Live map with vehicle markers (WebSocket feed)
 2. Violation log table
 3. Investigation detail view (hypothesis scores, evidence, decision history)
@@ -667,6 +655,7 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 ### `result.boxes.id is None` on every frame
 
 Normal for the first few frames while ByteTrack initialises. If it persists:
+
 - Confirm detections are actually happening: check `len(result.boxes) > 0`
 - Lower `--conf` to get more detections for ByteTrack to latch onto
 - ByteTrack needs at least 2–3 consistent detections to assign an ID
@@ -745,18 +734,17 @@ model.export(format="engine", device=0)  # TensorRT, NVIDIA only
 ## Reference Links
 
 | Resource | URL |
-|----------|-----|
-| Ultralytics tracking | https://docs.ultralytics.com/modes/track |
-| Ultralytics prediction | https://docs.ultralytics.com/modes/predict |
-| Results API | https://docs.ultralytics.com/modes/predict/#working-with-results |
-| FastAPI | https://fastapi.tiangolo.com |
-| Shapely | https://shapely.readthedocs.io |
-| NetworkX | https://networkx.org |
-| Ultralytics license | https://www.ultralytics.com/license |
+| ---------- | ----- |
+| Ultralytics tracking | <https://docs.ultralytics.com/modes/track> |
+| Ultralytics prediction | <https://docs.ultralytics.com/modes/predict> |
+| Results API | <https://docs.ultralytics.com/modes/predict/#working-with-results> |
+| FastAPI | <https://fastapi.tiangolo.com> |
+| Shapely | <https://shapely.readthedocs.io> |
+| NetworkX | <https://networkx.org> |
+| Ultralytics license | <https://www.ultralytics.com/license> |
 
 ---
 
 ## Contributing
 
 See `04_CONTRIBUTING.md`.
-

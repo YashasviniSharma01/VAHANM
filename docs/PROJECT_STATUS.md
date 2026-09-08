@@ -19,25 +19,28 @@ right now. Update this file as code is written, not those.
 ### What exists and runs
 
 | File | State | Notes |
-|------|-------|-------|
+| ------ | ------- | ------- |
 | `backend/intelligence/perception/detection/edge_tracker.py` | ✅ working | Phase 1 complete. Tested live at ~22–24 FPS on CPU. |
 | `backend/intelligence/perception/detection/yolo_detector.py` | ✅ written | Detection-only wrapper. `half_precision` defaults to `True` internally — override to `False` on CPU. |
 | `backend/intelligence/perception/detection/__init__.py` | ✅ | Exports `YOLODetector`, `create_detector`. |
 | `backend/config/detection.yaml` | ✅ corrected | `yolo26n.pt`, `half_precision: false`, `device: cpu`. |
 | `backend/yolo26n.pt` | ✅ cached | Downloaded on first run, now on disk. |
-| `backend/requirements.txt` | ✅ | Phase 1–2 deps active. Later phases commented out. |
+| `backend/requirements.txt` | ✅ | Phase 1–3 deps active (shapely enabled). |
+| `backend/intelligence/rules/result.py` | ✅ working | Unified RuleResult model matching 02_REASONING_AND_ORCHESTRATION.md §6.1. |
+| `backend/intelligence/rules/state_machine_rules.py` | ✅ working | Foundational models (Tracklet, WorldState, ZoneGeometry, TrafficRule ABC). |
+| `backend/intelligence/rules/line_crossing.py` | ✅ working | Line crossing geometry & direction checks via Shapely. |
+| `backend/intelligence/rules/__init__.py` | ✅ | Exports public rule interfaces. |
 
 ### What is started but not yet functional
 
 | File | State | Notes |
 |------|-------|-------|
-| `backend/intelligence/rules/state_machine_rules.py` | 🔧 in progress | Being written by developer. See Section Phase 3 below. |
 | `backend/main.py` | 🔧 in progress | Being written by developer. See Section Phase 7 below. |
 
 ### What exists only as directory stubs (no code yet)
 
 | Path | For phase |
-|------|-----------|
+| ------ | ----------- |
 | `backend/intelligence/coordinator/` | Phase 6, 8 |
 | `backend/intelligence/graph/` | Phase 9 |
 | `backend/intelligence/tracking/` | Phase 2+ |
@@ -47,7 +50,7 @@ right now. Update this file as code is written, not those.
 ### What does not exist yet
 
 | Path | For phase |
-|------|-----------|
+| ------ | ----------- |
 | `backend/intelligence/perception/observation_manager.py` | Phase 2 |
 | `backend/intelligence/perception/evidence_capture.py` | Phase 4 |
 | `backend/intelligence/perception/lpr/` | Phase 5 |
@@ -85,20 +88,21 @@ Nothing written yet.
 
 ---
 
-### Phase 3 — Violation Detection 🔧 in progress
+### Phase 3 — Violation Detection ✅ functional baseline
 
 **Proves:** a rule fires correctly against world state.
 
 **Design reference:** `02_REASONING_AND_ORCHESTRATION.md Section 6`
 
-**What is being written:** `backend/intelligence/rules/state_machine_rules.py`
+**Implemented:**
+- `backend/intelligence/rules/result.py`: Canonical `RuleResult` dataclass.
+- `backend/intelligence/rules/state_machine_rules.py`: `TrafficRule` ABC, `Tracklet`, `WorldState`, `ZoneGeometry`.
+- `backend/intelligence/rules/line_crossing.py`: `LineCrossingRule` with 2D cross-product direction check and Shapely intersection.
+- `backend/intelligence/rules/__init__.py`: Public package exports.
+- `learning_guide.md`: Internal guide for developers (gitignored).
 
-Developer is implementing this. No review of design intent here — see
-`02_REASONING_AND_ORCHESTRATION.md Section 6` for the rule interface contract.
-
-Key constraint: **rules evaluate conditions and return a result. They do not invoke
-capabilities, write to the database, or call the Orchestrator.** That separation must
-hold.
+Key constraint maintained: **rules evaluate conditions and return a result. They do not invoke
+capabilities, write to the database, or call the Orchestrator.** That separation holds.
 
 ---
 
@@ -155,6 +159,7 @@ are empty stubs.
 Protocol decision: **FastAPI native WebSocket, not Socket.IO.**
 
 Dependencies to uncomment in `requirements.txt` when ready:
+
 - `fastapi>=0.100.0`
 - `uvicorn>=0.23.0`
 - `psycopg2-binary>=2.9.0`
@@ -204,7 +209,7 @@ These are decisions that have been deliberately deferred. Do not commit to an an
 before the relevant phase begins.
 
 | Decision | Deferred to | Notes |
-|----------|-------------|-------|
+| ---------- | ------------- | ------- |
 | OCR engine | Phase 5 | Benchmark on real crops first |
 | Web framework (React/Vue/Angular) | Phase 10 | Depends on team familiarity |
 | Map library (Leaflet/Mapbox) | Phase 10 | Depends on API key availability |
@@ -217,9 +222,8 @@ before the relevant phase begins.
 ## Known Issues in Existing Code
 
 | File | Issue | Fix |
-|------|-------|-----|
+| ------ | ------- | ----- |
 | `yolo_detector.py` | `half_precision: True` hardcoded as default — errors on CPU | Pass `config={"half_precision": False}` or use `detection.yaml` |
 | `yolo_detector.py` | `model_path` default is `"yolo26n.pt"` (class-level default) | Correct; matches `detection.yaml` |
 | `edge_tracker.py` | `timestamp` is wall-clock, not video capture time | Accepted for Phase 1; fix in Phase 2 observation schema |
 | `edge_tracker.py` | No quality scoring on observations (all retained) | Phase 2 adds `ObservationManager` |
-
