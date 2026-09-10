@@ -151,3 +151,7 @@ if __name__ == "__main__":
     print(f"WorldState created: Signal={ws.signal_phase}, Cluster={ws.cluster_id}")
     print(f"ZoneGeometry created: Zone={zg.zone_id}, Type={zg.zone_type.value}")
     print("state_machine_rules: ALL CHECKS PASSED.")
+
+
+    #todo 
+    #adding better rules using neuro fuzzy logic
